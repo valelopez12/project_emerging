@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   tei:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.6
@@ -9,6 +7,12 @@ services:
       - "8080:80"
     volumes:
       - ./tei_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
 
   tgi:
     image: ghcr.io/huggingface/text-generation-inference:3.1.0
@@ -18,14 +22,31 @@ services:
       - "8081:80"
     volumes:
       - ./tgi_data:/data
+    # temporarily disabled until we add a robust probe
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:80/ping"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 60s
 
   rag:
     build: .
     ports:
       - "8000:8000"
     depends_on:
-      - tei
-      - tgi
+      tei:
+        condition: service_healthy
+      # tgi no longer blocks on health
+      tgi:
+        condition: service_started
     volumes:
       - ./index_storage:/app/index_storage
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fL", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 45s
+
